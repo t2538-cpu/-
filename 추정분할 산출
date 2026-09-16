@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>성취수준 추정분할 점수 관리 · 2학기 설정 &amp; 1학기 조회</title>
+<script>
+  // Chart.js를 두 CDN(cdnjs → jsdelivr) 순서로 시도해 불러온다.
+  // 하나가 막혀 있어도(방화벽·오프라인 등) 다른 경로로 자동 재시도한다.
+  (function(){
+    var sources = [
+      "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js",
+      "https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+    ];
+    function tryLoad(i){
+      if(i >= sources.length){
+        window.__chartLoadFailed = true;
+        window.dispatchEvent(new Event('chartjs-failed'));
+        return;
+      }
+      var s = document.createElement('script');
+      s.src = sources[i];
+      s.onload = function(){ window.dispatchEvent(new Event('chartjs-ready')); };
+      s.onerror = function(){ tryLoad(i+1); };
+      document.head.appendChild(s);
+    }
+    tryLoad(0);
+  })();
+</script>
+<style>
+  :root{
+    --paper:#eef1ee;
+    --sheet:#ffffff;
+    --ink:#152420;
+    --ink-soft:#4d5a55;
+    --line:#c7d0c9;
+    --line-strong:#8fa198;
+    --accent:#204b3f;
+    --accent-2:#3c7a63;
+    --accent-soft:#e2ede7;
+    --input-bg:#e9f4e6;
+    --input-border:#7fac8b;
+    --input-text:#1f4a2c;
+    --readonly-bg:#eef1ef;
+    --readonly-text:#16241f;
+    --lvl-a:#1f7a5c;
+    --lvl-b:#2e6f9e;
+    --lvl-c:#b98a2e;
+    --lvl-d:#c1652e;
+    --lvl-e:#a63d3d;
+    --lvl-x:#7c838a;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    color:var(--ink);
+    font-variant-numeric:tabular-nums;
+    padding:22px;
+  }
+  .sheet{
+    max-width:1580px;
+    margin:0 auto;
+    background:var(--sheet);
+    border:1px solid var(--line-strong);
+    box-shadow:0 1px 3px rgba(20,40,32,.08);
+  }
+  .sheet-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:16px;
+    padding:20px 28px 14px;
+    border-bottom:3px double var(--line-strong);
+  }
+  .sheet-head h1{
+    font-size:20px;
+    letter-spacing:-.01em;
+    margin:0;
+    color:var(--accent);
+  }
+  .sheet-head .sub{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    text-align:right;
+    line-height:1.6;
+  }
+  .tier{ padding:18px 28px 22px; }
+  .tier-divider{
+    border:none;
+    border-top:3px double var(--line-strong);
+    margin:0;
+  }
+  .tier h2{
+    font-size:15.5px;
+    margin:0 0 4px;
+    color:var(--accent);
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+  }
+  .tier h2 .roman{
+    font-size:15.5px;
+    color:var(--accent-2);
+  }
+  .tier .tier-desc{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin:0 0 14px;
+  }
+  .legend{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:11.5px;
+    color:var(--ink-soft);
+    margin-left:14px;
+  }
+  .legend .swatch{
+    width:11px;height:11px;
+    border-radius:2px;
+    display:inline-block;
+  }
+  .swatch.input{ background:var(--input-bg); border:1px solid var(--input-border); }
+  .swatch.readonly{ background:var(--readonly-bg); border:1px solid var(--line); }
+
+  /* ---------- top tier layout ---------- */
+  .top-grid{
+    display:grid;
+    grid-template-columns:1.55fr 1fr;
+    gap:20px;
+    align-items:start;
+  }
+  table.calc{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12.5px;
+  }
+  table.calc caption{
+    text-align:left;
+    font-size:12px;
+    font-weight:600;
+    color:var(--accent);
+    padding:0 0 6px;
+  }
+  table.calc th, table.calc td{
+    border:1px solid var(--line);
+    padding:5px 6px;
+    text-align:center;
+  }
+  table.calc thead th{
+    background:var(--accent);
+    color:#fff;
+    font-weight:600;
+    font-size:11.5px;
+    white-space:nowrap;
+  }
+  table.calc tbody th{
+    background:var(--accent-soft);
+    color:var(--accent);
+    font-weight:600;
+    font-size:12px;
+  }
+  table.calc input{
+    width:100%;
+    min-width:44px;
+    border:1px solid var(--input-border);
+    background:var(--input-bg);
+    color:var(--input-text);
+    font:inherit;
+    font-variant-numeric:tabular-nums;
+    text-align:center;
+    padding:3px 2px;
+    border-radius:var(--radius);
+  }
+  table.calc input:focus{
+    outline:2px solid var(--accent-2);
+    outline-offset:1px;
+  }
+  tr.computed td{
+    background:var(--readonly-bg);
+    font-weight:700;
+    color:var(--readonly-text);
+  }
+  tr.computed th{
+    background:#dfe4e0;
+    color:var(--ink);
+  }
+  tr.final-row td{
+    background:#dfeee7;
+    font-weight:700;
+    color:var(--accent);
+    font-size:13.5px;
+  }
+  tr.final-row th{
+    background:var(--accent);
+    color:#fff;
+  }
+  .apply-row{
+    display:flex;
+    gap:8px;
+    margin:8px 0 16px;
+    flex-wrap:wrap;
+  }
+  .apply-row button{
+    font:inherit;
+    font-size:12px;
+    padding:6px 12px;
+    border:1px solid var(--accent-2);
+    background:#fff;
+    color:var(--accent-2);
+    border-radius:var(--radius);
+    cursor:pointer;
+  }
+  .apply-row button:hover{ background:var(--accent-2); color:#fff; }
+  .apply-row .hint{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    align-self:center;
+  }
+  input.fixed-ratio{
+    background:var(--readonly-bg) !important;
+    color:var(--readonly-text) !important;
+    border-color:var(--line) !important;
+    cursor:not-allowed;
+  }
+  .final-note{
+    font-size:11px;
+    color:var(--ink-soft);
+    margin:6px 2px 0;
+  }
+
+  /* ---------- bottom tier layout ---------- */
+  .bottom-grid{
+    display:grid;
+    grid-template-columns:1.35fr 1fr;
+    gap:24px;
+  }
+  .search-box{ position:relative; margin-bottom:14px; }
+  .search-row{ display:flex; gap:8px; }
+  .search-box input[type="text"],
+  .search-box select{
+    font:inherit;
+    font-size:14px;
+    padding:9px 12px;
+    border:1.5px solid var(--line-strong);
+    border-radius:var(--radius);
+    background:#fff;
+    color:var(--ink);
+  }
+  .search-box input[type="text"]{ flex:1.3; min-width:0; }
+  .search-box select{ flex:1; min-width:0; }
+  .search-box input[type="text"]:focus,
+  .search-box select:focus{ outline:2px solid var(--accent-2); border-color:var(--accent-2); }
+  .search-hint{ font-size:11px; color:var(--ink-soft); margin:5px 2px 0; }
+  .suggest{
+    position:absolute;
+    z-index:5;
+    top:calc(100% + 2px);
+    left:0; right:0;
+    background:#fff;
+    border:1px solid var(--line-strong);
+    max-height:220px;
+    overflow-y:auto;
+    box-shadow:0 4px 10px rgba(20,40,32,.14);
+    display:none;
+  }
+  .suggest.show{ display:block; }
+  .suggest .opt{
+    padding:7px 12px;
+    font-size:12.5px;
+    cursor:pointer;
+    border-bottom:1px solid #eef0ee;
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .suggest .opt:hover, .suggest .opt.active{ background:var(--accent-soft); }
+  .suggest .opt .g{ color:var(--ink-soft); font-size:11px; }
+
+  .subject-tag{
+    display:inline-flex;
+    gap:8px;
+    align-items:center;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-bottom:10px;
+  }
+  .subject-tag b{
+    font-size:16px;
+    color:var(--accent);
+  }
+  .subject-tag span{
+    border:1px solid var(--line-strong);
+    border-radius:20px;
+    padding:1px 10px;
+  }
+
+  table.report{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12px;
+    margin-bottom:12px;
+  }
+  table.report th, table.report td{
+    border:1px solid var(--line);
+    padding:5px 6px;
+    text-align:center;
+  }
+  table.report thead th{
+    background:var(--accent);
+    color:#fff;
+    font-size:11px;
+  }
+  table.report tbody th{
+    background:var(--accent-soft);
+    color:var(--accent);
+    text-align:left;
+    font-size:11.5px;
+    white-space:nowrap;
+  }
+  table.report td.lvl-A{ color:var(--lvl-a); font-weight:700; }
+  table.report td.lvl-B{ color:var(--lvl-b); font-weight:700; }
+  table.report td.lvl-C{ color:var(--lvl-c); font-weight:700; }
+  table.report td.lvl-D{ color:var(--lvl-d); font-weight:700; }
+  table.report td.lvl-E{ color:var(--lvl-e); font-weight:700; }
+  table.report td.lvl-below{ color:var(--lvl-x); }
+  table.report tr.ratio-row td{ background:#f7f9f7; font-weight:700; }
+
+  .empty-state{
+    border:1.5px dashed var(--line-strong);
+    border-radius:var(--radius);
+    padding:26px 16px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:13px;
+  }
+  .chart-wrap{
+    border:1px solid var(--line);
+    padding:12px;
+    height:100%;
+  }
+  .chart-wrap h3{
+    margin:0 0 10px;
+    font-size:12.5px;
+    color:var(--accent);
+    font-weight:600;
+  }
+  .chart-note{
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-top:8px;
+  }
+
+  @media (max-width:1180px){
+    .top-grid, .bottom-grid{ grid-template-columns:1fr; }
+  }
+
+  @media print{
+    body{ background:#fff; padding:0; }
+    .sheet{ box-shadow:none; border:none; max-width:none; }
+    .apply-row button{ display:none; }
+    @page{ size:landscape; margin:10mm; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="sheet-head">
+    <h1>성취수준 추정분할 점수 관리표</h1>
+    <div class="sub">
+      2학기 추정분할 점수 설정 · 1학기 추정분할 점수 조회<br>
+      입력 셀(연두색)만 수정하며, 그 외 항목은 자동 계산됩니다.
+    </div>
+  </div>
+
+  <!-- ============ TOP TIER ============ -->
+  <section class="tier tier-top">
+    <h2><span class="roman">Ⅰ.</span> 2학기 추정분할 점수 설정
+      <span class="legend"><span class="swatch input"></span>입력 셀</span>
+      <span class="legend"><span class="swatch readonly"></span>자동 계산 셀</span>
+    </h2>
+    <p class="tier-desc">문항 유형·난이도별 정답률을 입력하면 등급별 산출 추정점수가 자동 계산됩니다. 계산 결과는 아래 반영표의 1차·2차 정기시험 칸에 그대로 반영하거나 직접 수정할 수 있습니다.</p>
+
+    <div class="top-grid">
+      <!-- 문항분석 계산기 -->
+      <div>
+        <table class="calc" id="itemTable">
+          <caption>문항 분석 계산기 (등급별 산출 추정점수 = Σ 정답률 × 배점합 ÷ 100)</caption>
+          <thead>
+            <tr>
+              <th>문항구분</th><th>난이도</th><th>문항수</th><th>배점합</th>
+              <th>A</th><th>B</th><th>C</th><th>D</th><th>E<br>(공통만)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="apply-row">
+          <button type="button" id="applyExam1">↳ 1차 정기시험에 반영</button>
+          <button type="button" id="applyExam2">↳ 2차 정기시험에 반영</button>
+          <span class="hint">위 계산기 값을 오른쪽 표의 1차 / 2차 정기시험 칸으로 복사합니다.</span>
+        </div>
+      </div>
+
+      <!-- 반영비율 및 학기말 합산 -->
+      <div>
+        <table class="calc" id="finalTable">
+          <caption>반영비율 적용 &amp; 학기말 추정점수 산출</caption>
+          <thead>
+            <tr><th>구분</th><th>반영<br>비율</th><th>A</th><th>B</th><th>C</th><th>D</th><th>E<br>(공통만)</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p class="final-note">※ 수행평가 반영비율은 1로 고정되어 수정할 수 없습니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="tier-divider">
+
+  <!-- ============ BOTTOM TIER ============ -->
+  <section class="tier tier-bottom">
+    <h2><span class="roman">Ⅱ.</span> 1학기 추정분할 점수 조회</h2>
+    <p class="tier-desc">과목명을 검색하면 수행평가 · 1차 · 2차 · 학기말 추정분할 점수와 학기말 학생 비율, 수준별 분포 그래프를 확인할 수 있습니다.</p>
+
+    <div class="bottom-grid">
+      <div>
+        <div class="search-box">
+          <div class="search-row">
+            <select id="subjectSelect">
+              <option value="">▾ 과목 드롭다운 선택</option>
+            </select>
+            <input type="text" id="q" autocomplete="off" placeholder="또는 과목명 검색 (예: 문학, 미적분...)">
+          </div>
+          <div class="suggest" id="suggest"></div>
+          <p class="search-hint">교과군별 드롭다운에서 바로 고르거나, 오른쪽 입력창에 과목명을 입력해 검색하세요.</p>
+        </div>
+
+        <div id="resultArea">
+          <div class="empty-state">과목을 검색해 선택하면 1학기 추정분할 점수가 여기에 표시됩니다.</div>
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <h3>학기말 학생 비율 (수준별 %)</h3>
+        <p class="chart-note" id="chartStatus">그래프 라이브러리를 불러오는 중입니다...</p>
+        <canvas id="ratioChart" height="230" style="display:none;"></canvas>
+        <p class="chart-note" id="chartNote"></p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const SUBJECTS = [{"group": "국어과", "subject": "공통국어1", "grade": "1학년", "maxScore": "40", "perf": {"A": "36", "B": "30", "C": "24", "D": "18", "E": "16", "below": "-"}, "exam1": {"A": "79.44", "B": "67.16", "C": "52.16", "D": "37.03", "E": "20.59", "below": "-"}, "exam2": {"A": "74.4", "B": "60.82", "C": "48.71", "D": "36.63", "E": "17.55", "below": "-"}, "final": {"A": "82", "B": "68", "C": "54", "D": "40", "E": "27", "below": "27 미만"}, "ratio": {"A": "25.70%", "B": "38.83%", "C": "24.02%", "D": "5.87%", "E": "4.75%", "below": "0.84%"}}, {"group": "국어과", "subject": "문학", "grade": "2학년", "maxScore": "48", "perf": {"A": "43", "B": "38", "C": "32", "D": "26", "E": "-", "below": "-"}, "exam1": {"A": "85.24", "B": "77.42", "C": "64.17", "D": "46.96", "E": "-", "below": "-"}, "exam2": {"A": "88.15", "B": "78.49", "C": "63.49", "D": "48.49", "E": "-", "below": "-"}, "final": {"A": "88", "B": "79", "C": "65", "D": "51", "E": "51 미만", "below": "-"}, "ratio": {"A": "21.49%", "B": "28.06%", "C": "29.55%", "D": "14.93%", "E": "5.97%", "below": "-"}}, {"group": "국어과", "subject": "언어와 매체", "grade": "3학년", "maxScore": "40", "perf": {"A": "37", "B": "34", "C": "30", "D": "18", "E": "-", "below": "-"}, "exam1": {"A": "76.34", "B": "61.34", "C": "46.34", "D": "31.34", "E": "-", "below": "-"}, "exam2": {"A": "69.14", "B": "58.06", "C": "45.02", "D": "29.31", "E": "-", "below": "-"}, "final": {"A": "81", "B": "70", "C": "57", "D": "36", "E": "35 미만", "below": "-"}, "ratio": {"A": "15.65%", "B": "11.30%", "C": "10.43%", "D": "35.65%", "E": "26.96%", "below": "-"}}, {"group": "국어과", "subject": "화법과 작문", "grade": "3학년", "maxScore": "40", "perf": {"A": "37", "B": "32", "C": "26", "D": "18", "E": "-", "below": "-"}, "exam1": {"A": "79.6", "B": "65.59", "C": "50.59", "D": "35.82", "E": "-", "below": "-"}, "exam2": {"A": "79.87", "B": "66.09", "C": "51.54", "D": "37.95", "E": "-", "below": "-"}, "final": {"A": "85", "B": "72", "C": "57", "D": "40", "E": "40 미만", "below": "-"}, "ratio": {"A": "17.77%", "B": "25.50%", "C": "22.64%", "D": "16.91%", "E": "17.19%", "below": "-"}}, {"group": "국어과", "subject": "심화국어", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "49.02%", "B": "29.41%", "C": "21.57%", "D": "-", "E": "-", "below": "-"}}, {"group": "수학과", "subject": "공통수학1", "grade": "1학년", "maxScore": "50", "perf": {"A": "45", "B": "40", "C": "35", "D": "30", "E": "21", "below": "-"}, "exam1": {"A": "82.13", "B": "67.13", "C": "52.13", "D": "37.13", "E": "18.13", "below": "-"}, "exam2": {"A": "84.33", "B": "69.33", "C": "54.33", "D": "39.33", "E": "20.33", "below": "-"}, "final": {"A": "87", "B": "74", "C": "62", "D": "49", "E": "31", "below": "31 미만"}, "ratio": {"A": "17.88%", "B": "41.62%", "C": "21.79%", "D": "10.34%", "E": "6.98%", "below": "1.39%"}}, {"group": "수학과", "subject": "대수", "grade": "2학년", "maxScore": "40", "perf": {"A": "36", "B": "32", "C": "28", "D": "24", "E": "-", "below": "-"}, "exam1": {"A": "81.18", "B": "65.48", "C": "49.18", "D": "30.83", "E": "-", "below": "-"}, "exam2": {"A": "76", "B": "60.78", "C": "46.11", "D": "29.72", "E": "-", "below": "-"}, "final": {"A": "83", "B": "70", "C": "57", "D": "42", "E": "42 미만", "below": "-"}, "ratio": {"A": "19.40%", "B": "24.78%", "C": "18.51%", "D": "15.22%", "E": "22.09%", "below": "-"}}, {"group": "수학과", "subject": "확률과 통계", "grade": "2학년", "maxScore": "50", "perf": {"A": "45", "B": "40", "C": "35", "D": "30", "E": "-", "below": "-"}, "exam1": {"A": "83.21", "B": "68.21", "C": "53.21", "D": "38.21", "E": "-", "below": "-"}, "exam2": {"A": "79.19", "B": "67.58", "C": "52.58", "D": "37.58", "E": "-", "below": "-"}, "final": {"A": "86", "B": "74", "C": "61", "D": "49", "E": "49 미만", "below": "-"}, "ratio": {"A": "17.31%", "B": "28.66%", "C": "17.31%", "D": "20.00%", "E": "16.72%", "below": "-"}}, {"group": "수학과", "subject": "미적분", "grade": "3학년", "maxScore": "40", "perf": {"A": "37", "B": "33", "C": "29", "D": "25", "E": "-", "below": "-"}, "exam1": {"A": "73.64", "B": "62.21", "C": "47.04", "D": "33.08", "E": "-", "below": "-"}, "exam2": {"A": "68.48", "B": "56.96", "C": "41.32", "D": "13.91", "E": "-", "below": "-"}, "final": {"A": "80", "B": "69", "C": "56", "D": "39", "E": "39 미만", "below": "-"}, "ratio": {"A": "22.14%", "B": "15.27%", "C": "9.16%", "D": "19.85%", "E": "33.59%", "below": "-"}}, {"group": "수학과", "subject": "기하", "grade": "2학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "54.93%", "B": "22.54%", "C": "22.54%", "D": "-", "E": "-", "below": "-"}}, {"group": "수학과", "subject": "심화수학Ⅰ", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "73.98%", "B": "20.33%", "C": "5.69%", "D": "-", "E": "-", "below": "-"}}, {"group": "수학과", "subject": "수학과제탐구", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "41.28%", "B": "10.09%", "C": "48.62%", "D": "-", "E": "-", "below": "-"}}, {"group": "영어과", "subject": "공통영어1", "grade": "1학년", "maxScore": "40", "perf": {"A": "38", "B": "34", "C": "28", "D": "22", "E": "16", "below": "-"}, "exam1": {"A": "82.15", "B": "67.15", "C": "52.15", "D": "37.15", "E": "18.15", "below": "-"}, "exam2": {"A": "84.47", "B": "69.47", "C": "54.47", "D": "39.47", "E": "20.47", "below": "-"}, "final": {"A": "88", "B": "75", "C": "60", "D": "45", "E": "45 미만", "below": "35 미만"}, "ratio": {"A": "15.24%", "B": "26.32%", "C": "31.86%", "D": "22.44%", "E": "3.32%", "below": "0.82%"}}, {"group": "영어과", "subject": "영어1", "grade": "2학년", "maxScore": "40", "perf": {"A": "38", "B": "32", "C": "28", "D": "22", "E": "-", "below": "-"}, "exam1": {"A": "80.17", "B": "67.44", "C": "55.14", "D": "38.96", "E": "-", "below": "-"}, "exam2": {"A": "71.55", "B": "61.41", "C": "50.49", "D": "34.99", "E": "-", "below": "-"}, "final": {"A": "80", "B": "67", "C": "55", "D": "39", "E": "39 미만", "below": "-"}, "ratio": {"A": "31.14%", "B": "23.05%", "C": "17.37%", "D": "20.66%", "E": "7.78%", "below": "-"}}, {"group": "영어과", "subject": "영어독해와 작문", "grade": "3학년", "maxScore": "40", "perf": {"A": "36", "B": "30", "C": "24", "D": "18", "E": "-", "below": "-"}, "exam1": {"A": "74.12", "B": "60.39", "C": "46.45", "D": "34.63", "E": "-", "below": "-"}, "exam2": {"A": "77.34", "B": "66", "C": "51.56", "D": "41.56", "E": "-", "below": "-"}, "final": {"A": "87", "B": "75", "C": "65", "D": "53", "E": "35", "below": "-"}, "ratio": {"A": "19.77%", "B": "12.32%", "C": "21.49%", "D": "20.06%", "E": "26.36%", "below": "-"}}, {"group": "영어과", "subject": "영어권문화", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "32.20%", "B": "23.20%", "C": "44.60%", "D": "-", "E": "-", "below": "-"}}, {"group": "영어과", "subject": "심화영어1", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "52.94%", "B": "30.59%", "C": "16.47%", "D": "-", "E": "-", "below": "-"}}, {"group": "사회과", "subject": "한국사1", "grade": "1학년", "maxScore": "50", "perf": {"A": "45", "B": "40", "C": "35", "D": "30", "E": "20", "below": "-"}, "exam1": {"A": "85.1", "B": "70.1", "C": "55.1", "D": "41.13", "E": "22.13", "below": "-"}, "exam2": {"A": "83.22", "B": "69.24", "C": "54.62", "D": "41.02", "E": "22.02", "below": "-"}, "final": {"A": "87", "B": "75", "C": "62", "D": "51", "E": "51 미만", "below": "2.24% 미도달"}, "ratio": {"A": "25.70%", "B": "25.42%", "C": "27.09%", "D": "10.89%", "E": "8.66%", "below": "2.24%"}}, {"group": "사회과", "subject": "통합사회1", "grade": "1학년", "maxScore": "40", "perf": {"A": "38", "B": "33", "C": "28", "D": "22", "E": "16", "below": "-"}, "exam1": {"A": "87.43", "B": "72.43", "C": "57.43", "D": "42.43", "E": "23.43", "below": "-"}, "exam2": {"A": "75.33", "B": "60.63", "C": "45.63", "D": "30.63", "E": "12.4", "below": "-"}, "final": {"A": "87", "B": "73", "C": "59", "D": "44", "E": "27", "below": "27 미만"}, "ratio": {"A": "17.04%", "B": "36.31%", "C": "25.98%", "D": "12.01%", "E": "6.98%", "below": "1.68%"}}, {"group": "사회과", "subject": "세계사", "grade": "2학년", "maxScore": "30", "perf": {"A": "25", "B": "20", "C": "15", "D": "12", "E": "-", "below": "-"}, "exam1": {"A": "83.26", "B": "70.64", "C": "58.02", "D": "45.4", "E": "-", "below": "-"}, "exam2": {"A": "87.49", "B": "75.61", "C": "63.73", "D": "48.73", "E": "-", "below": "-"}, "final": {"A": "85", "B": "71", "C": "58", "D": "45", "E": "45 미만", "below": "-"}, "ratio": {"A": "24.44%", "B": "15.56%", "C": "11.11%", "D": "17.78%", "E": "31.11%", "below": "-"}}, {"group": "사회과", "subject": "정치", "grade": "2학년", "maxScore": "40", "perf": {"A": "36", "B": "32", "C": "28", "D": "24", "E": "-", "below": "-"}, "exam1": {"A": "82.99", "B": "71.97", "C": "58.3", "D": "43.3", "E": "-", "below": "-"}, "exam2": {"A": "85.63", "B": "74.61", "C": "59.61", "D": "44.61", "E": "-", "below": "-"}, "final": {"A": "87", "B": "76", "C": "63", "D": "50", "E": "50 미만", "below": "-"}, "ratio": {"A": "35.90%", "B": "10.26%", "C": "12.82%", "D": "20.51%", "E": "20.51%", "below": "-"}}, {"group": "사회과", "subject": "사회와 문화", "grade": "2학년", "maxScore": "40", "perf": {"A": "35", "B": "30", "C": "25", "D": "20", "E": "-", "below": "-"}, "exam1": {"A": "83.21", "B": "73.21", "C": "58.21", "D": "43.21", "E": "-", "below": "-"}, "exam2": {"A": "81.03", "B": "72.51", "C": "57.51", "D": "42.51", "E": "-", "below": "-"}, "final": {"A": "84", "B": "74", "C": "66", "D": "46", "E": "46 미만", "below": "-"}, "ratio": {"A": "32.70%", "B": "19.70%", "C": "19.70%", "D": "20.70%", "E": "7.20%", "below": "-"}}, {"group": "사회과", "subject": "윤리와 사상", "grade": "2학년", "maxScore": "40", "perf": {"A": "35", "B": "30", "C": "25", "D": "20", "E": "-", "below": "-"}, "exam1": {"A": "82.29", "B": "67.29", "C": "52.29", "D": "38.52", "E": "-", "below": "-"}, "exam2": {"A": "78.24", "B": "64.45", "C": "53.12", "D": "41.18", "E": "-", "below": "-"}, "final": {"A": "83", "B": "70", "C": "57", "D": "44", "E": "44 미만", "below": "-"}, "ratio": {"A": "30.67%", "B": "20.67%", "C": "21.33%", "D": "14.00%", "E": "13.33%", "below": "-"}}, {"group": "사회과", "subject": "세계시민과 지리", "grade": "2학년", "maxScore": "40", "perf": {"A": "36", "B": "32", "C": "28", "D": "24", "E": "-", "below": "-"}, "exam1": {"A": "85.24", "B": "75.24", "C": "65.24", "D": "55.24", "E": "-", "below": "-"}, "exam2": {"A": "84.83", "B": "74.83", "C": "64.83", "D": "54.83", "E": "-", "below": "-"}, "final": {"A": "87", "B": "75", "C": "65", "D": "53", "E": "35", "below": "-"}, "ratio": {"A": "20.00%", "B": "12.50%", "C": "8.75%", "D": "12.50%", "E": "46.25%", "below": "-"}}, {"group": "사회과", "subject": "사회문화", "grade": "3학년", "maxScore": "40", "perf": {"A": "36", "B": "32", "C": "28", "D": "24", "E": "-", "below": "-"}, "exam1": {"A": "85.3", "B": "71.76", "C": "58.22", "D": "43.22", "E": "-", "below": "-"}, "exam2": {"A": "79.4", "B": "67.74", "C": "56.08", "D": "42.44", "E": "-", "below": "-"}, "final": {"A": "85", "B": "74", "C": "62", "D": "50", "E": "50 미만", "below": "-"}, "ratio": {"A": "16.30%", "B": "18.10%", "C": "16.30%", "D": "20.30%", "E": "29.10%", "below": "-"}}, {"group": "사회과", "subject": "세계지리", "grade": "3학년", "maxScore": "40", "perf": {"A": "36", "B": "32", "C": "28", "D": "24", "E": "-", "below": "-"}, "exam1": {"A": "75.51", "B": "57.28", "C": "42.28", "D": "27.28", "E": "-", "below": "-"}, "exam2": {"A": "75.28", "B": "60.28", "C": "45.28", "D": "30.28", "E": "-", "below": "-"}, "final": {"A": "87", "B": "75", "C": "65", "D": "53", "E": "35", "below": "-"}, "ratio": {"A": "21.95%", "B": "17.07%", "C": "24.39%", "D": "21.95%", "E": "14.63%", "below": "-"}}, {"group": "사회과", "subject": "생활과 윤리", "grade": "3학년", "maxScore": "40", "perf": {"A": "36", "B": "32", "C": "26", "D": "16", "E": "-", "below": "-"}, "exam1": {"A": "78.21", "B": "63.21", "C": "50.71", "D": "35.71", "E": "-", "below": "-"}, "exam2": {"A": "78.46", "B": "69.12", "C": "53.01", "D": "38.01", "E": "-", "below": "-"}, "final": {"A": "83", "B": "72", "C": "57", "D": "38", "E": "38 미만", "below": "-"}, "ratio": {"A": "20.98%", "B": "8.78%", "C": "16.59%", "D": "20.49%", "E": "33.17%", "below": "-"}}, {"group": "사회과", "subject": "사회문제탐구", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "80.83%", "B": "15.83%", "C": "3.33%", "D": "-", "E": "-", "below": "-"}}, {"group": "사회과", "subject": "사회과제연구", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "92.50%", "B": "2.50%", "C": "5.00%", "D": "-", "E": "-", "below": "-"}}, {"group": "사회과", "subject": "세계문제와미래사회", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "70.59%", "B": "21.01%", "C": "8.40%", "D": "-", "E": "-", "below": "-"}}, {"group": "사회과", "subject": "여행지리", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "34.38%", "B": "25.00%", "C": "40.63%", "D": "-", "E": "-", "below": "-"}}, {"group": "사회과", "subject": "현대세계의변화", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "57.69%", "B": "15.38%", "C": "26.92%", "D": "-", "E": "-", "below": "-"}}, {"group": "과학과", "subject": "통합과학1", "grade": "1학년", "maxScore": "50", "perf": {"A": "45", "B": "40", "C": "35", "D": "30", "E": "20", "below": "-"}, "exam1": {"A": "83.83", "B": "68.83", "C": "53.83", "D": "38.83", "E": "20.97", "below": "-"}, "exam2": {"A": "84.12", "B": "69.68", "C": "54.68", "D": "39.68", "E": "22.03", "below": "-"}, "final": {"A": "87", "B": "75", "C": "62", "D": "50", "E": "50 미만", "below": "-"}, "ratio": {"A": "26.82%", "B": "21.51%", "C": "20.95%", "D": "19.55%", "E": "11.17%", "below": "0%"}}, {"group": "과학과", "subject": "과학탐구실험", "grade": "1학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "40", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "96.10%", "B": "1.70%", "C": "2.20%", "D": "-", "E": "-", "below": "-"}}, {"group": "과학과", "subject": "생명과학", "grade": "2학년", "maxScore": "30", "perf": {"A": "28", "B": "25", "C": "22", "D": "17", "E": "-", "below": "-"}, "exam1": {"A": "85.17", "B": "71.63", "C": "59.38", "D": "46.55", "E": "-", "below": "-"}, "exam2": {"A": "68.81", "B": "53.81", "C": "38.81", "D": "23.81", "E": "-", "below": "-"}, "final": {"A": "82", "B": "69", "C": "56", "D": "42", "E": "42 미만", "below": "-"}, "ratio": {"A": "18.42%", "B": "24.34%", "C": "26.32%", "D": "15.79%", "E": "15.13%", "below": "-"}}, {"group": "과학과", "subject": "화학", "grade": "2학년", "maxScore": "40", "perf": {"A": "37", "B": "34", "C": "30", "D": "26", "E": "-", "below": "-"}, "exam1": {"A": "83.04", "B": "68.04", "C": "53.04", "D": "38.04", "E": "-", "below": "-"}, "exam2": {"A": "86.04", "B": "76.04", "C": "66.04", "D": "51.04", "E": "-", "below": "-"}, "final": {"A": "88", "B": "77", "C": "66", "D": "53", "E": "53 미만", "below": "-"}, "ratio": {"A": "15.50%", "B": "22.50%", "C": "23.30%", "D": "17.80%", "E": "20.90%", "below": "-"}}, {"group": "과학과", "subject": "물리학", "grade": "2학년", "maxScore": "40", "perf": {"A": "37", "B": "34", "C": "30", "D": "26", "E": "-", "below": "-"}, "exam1": {"A": "80.22", "B": "67.19", "C": "48.22", "D": "31.08", "E": "-", "below": "-"}, "exam2": {"A": "80.7", "B": "62.72", "C": "47.22", "D": "32.69", "E": "-", "below": "-"}, "final": {"A": "85", "B": "73", "C": "59", "D": "45", "E": "45 미만", "below": "-"}, "ratio": {"A": "18.63%", "B": "31.37%", "C": "24.51%", "D": "15.69%", "E": "9.80%", "below": "-"}}, {"group": "과학과", "subject": "지구과학", "grade": "2학년", "maxScore": "30", "perf": {"A": "27", "B": "24", "C": "21", "D": "18", "E": "-", "below": "-"}, "exam1": {"A": "80.42", "B": "65.42", "C": "50.42", "D": "35.42", "E": "-", "below": "-"}, "exam2": {"A": "77.44", "B": "66.01", "C": "51.01", "D": "36.01", "E": "-", "below": "-"}, "final": {"A": "82", "B": "70", "C": "56", "D": "43", "E": "43 미만", "below": "-"}, "ratio": {"A": "13.00%", "B": "15.00%", "C": "18.00%", "D": "23.00%", "E": "31.00%", "below": "-"}}, {"group": "과학과", "subject": "화학Ⅱ", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "58.54%", "B": "24.39%", "C": "17.07%", "D": "-", "E": "-", "below": "-"}}, {"group": "과학과", "subject": "생명과학Ⅱ", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "27.42%", "B": "29.03%", "C": "43.55%", "D": "-", "E": "-", "below": "-"}}, {"group": "과학과", "subject": "지구과학Ⅱ", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "32.73%", "B": "29.09%", "C": "38.18%", "D": "-", "E": "-", "below": "-"}}, {"group": "과학과", "subject": "물리학Ⅱ", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "25.37%", "B": "43.28%", "C": "31.34%", "D": "-", "E": "-", "below": "-"}}, {"group": "과학과", "subject": "생활과 과학", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "62.42%", "B": "19.39%", "C": "18.18%", "D": "-", "E": "-", "below": "-"}}, {"group": "과학과", "subject": "과학과제 연구", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "86.84%", "B": "7.89%", "C": "5.26%", "D": "-", "E": "-", "below": "-"}}, {"group": "과학과", "subject": "생명과학 실험", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "67.27%", "B": "14.55%", "C": "18.18%", "D": "-", "E": "-", "below": "-"}}, {"group": "생활교양", "subject": "기술가정", "grade": "1학년", "maxScore": "70", "perf": {"A": "63", "B": "56", "C": "49", "D": "42", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "79.77", "B": "64.77", "C": "49.77", "D": "34.77", "E": "-", "below": "-"}, "final": {"A": "87", "B": "75", "C": "64", "D": "52", "E": "52 미만", "below": "-"}, "ratio": {"A": "45.70%", "B": "37.00%", "C": "8.20%", "D": "3.80%", "E": "5.40%", "below": "-"}}, {"group": "생활교양", "subject": "정보", "grade": "1학년", "maxScore": "70", "perf": {"A": "63", "B": "56", "C": "49", "D": "42", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "82.45", "B": "56.71", "C": "46.71", "D": "28.78", "E": "-", "below": "-"}, "final": {"A": "88", "B": "73", "C": "63", "D": "51", "E": "51 미만", "below": "-"}, "ratio": {"A": "28.16%", "B": "28.16%", "C": "22.41%", "D": "11.49%", "E": "9.77%", "below": "-"}}, {"group": "생활교양", "subject": "인공지능기초", "grade": "2학년", "maxScore": "70", "perf": {"A": "63", "B": "56", "C": "49", "D": "42", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "71.83", "B": "56.83", "C": "41.83", "D": "26.83", "E": "-", "below": "-"}, "final": {"A": "85", "B": "73", "C": "62", "D": "50", "E": "50 미만", "below": "-"}, "ratio": {"A": "12.21%", "B": "25.95%", "C": "12.98%", "D": "22.90%", "E": "25.95%", "below": "-"}}, {"group": "생활교양", "subject": "일본어", "grade": "2학년", "maxScore": "60", "perf": {"A": "54", "B": "48", "C": "42", "D": "36", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "87.42", "B": "73.37", "C": "59.32", "D": "45.27", "E": "-", "below": "-"}, "final": {"A": "89", "B": "77", "C": "66", "D": "54", "E": "54 미만", "below": "-"}, "ratio": {"A": "24.50%", "B": "22.55%", "C": "16.18%", "D": "13.73%", "E": "23.04%", "below": "-"}}, {"group": "생활교양", "subject": "공학일반", "grade": "2학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "64.71%", "B": "15.69%", "C": "19.61%", "D": "-", "E": "-", "below": "-"}}, {"group": "생활교양", "subject": "가정과학", "grade": "2학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "82.93%", "B": "9.76%", "C": "7.32%", "D": "-", "E": "-", "below": "-"}}, {"group": "생활교양", "subject": "인공지능기초", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "58.42%", "B": "29.70%", "C": "11.88%", "D": "-", "E": "-", "below": "-"}}, {"group": "생활교양", "subject": "일본 문화", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "43.59%", "B": "33.33%", "C": "23.08%", "D": "-", "E": "-", "below": "-"}}, {"group": "생활교양", "subject": "프로그래밍", "grade": "3학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "43.68%", "B": "40.23%", "C": "16.09%", "D": "-", "E": "-", "below": "-"}}, {"group": "생활교양", "subject": "프랑스어 회화", "grade": "2학년", "maxScore": null, "perf": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam1": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "exam2": {"A": "-", "B": "-", "C": "-", "D": "-", "E": "-", "below": "-"}, "final": {"A": "80", "B": "60", "C": "60 미만", "D": "-", "E": "-", "below": "-"}, "ratio": {"A": "75.00%", "B": "25.00%", "C": "0.00%", "D": "-", "E": "-", "below": "-"}}];
+
+/* =========================================================
+   Ⅰ. 2학기 추정분할 점수 설정 계산기
+   ========================================================= */
+const LEVELS = ['A','B','C','D','E'];
+
+// 문항분석 초기값 (업로드된 예시 CSV 값 기준)
+const ITEM_ROWS = [
+  {type:'선택형', rowspan:3, diff:'쉬움',  count:6, points:26.5, rate:{A:100,B:85,C:70,D:55,E:''}},
+  {type:'선택형', rowspan:0, diff:'보통',  count:7, points:35.4, rate:{A:90, B:75,C:60,D:45,E:''}},
+  {type:'선택형', rowspan:0, diff:'어려움',count:5, points:28.1, rate:{A:70, B:55,C:40,D:25,E:''}},
+  {type:'서답형', rowspan:3, diff:'쉬움',  count:'', points:'',  rate:{A:'',B:'',C:'',D:'',E:''}},
+  {type:'서답형', rowspan:0, diff:'보통',  count:'', points:'',  rate:{A:85, B:70,C:65,D:40,E:''}},
+  {type:'서답형', rowspan:0, diff:'어려움',count:'', points:'',  rate:{A:50, B:35,C:20,D:5, E:''}},
+];
+
+const itemBody = document.querySelector('#itemTable tbody');
+ITEM_ROWS.forEach((row, i)=>{
+  const tr = document.createElement('tr');
+  let html = '';
+  if(row.rowspan){
+    html += `<th rowspan="${row.rowspan}">${row.type}</th>`;
+  }
+  html += `<th>${row.diff}</th>`;
+  html += `<td><input type="number" step="1" data-role="count" data-i="${i}" value="${row.count}"></td>`;
+  html += `<td><input type="number" step="0.1" data-role="points" data-i="${i}" value="${row.points}"></td>`;
+  LEVELS.forEach(L=>{
+    html += `<td><input type="number" step="1" data-role="rate" data-i="${i}" data-l="${L}" value="${row.rate[L]}"></td>`;
+  });
+  tr.innerHTML = html;
+  itemBody.appendChild(tr);
+});
+
+// 산출되는 추정점수 (계산 전용 행)
+const computedRow = document.createElement('tr');
+computedRow.className = 'computed';
+computedRow.innerHTML = `<th colspan="2">산출되는 추정점수</th><td colspan="2">자동계산</td>` +
+  LEVELS.map(L=>`<td id="itemOut_${L}">0.00</td>`).join('');
+itemBody.appendChild(computedRow);
+
+function computeItemAnalysis(){
+  const out = {A:0,B:0,C:0,D:0,E:0};
+  itemBody.querySelectorAll('input[data-role="points"]').forEach(pointsInput=>{
+    const i = pointsInput.dataset.i;
+    const points = parseFloat(pointsInput.value) || 0;
+    LEVELS.forEach(L=>{
+      const rateInput = itemBody.querySelector(`input[data-role="rate"][data-i="${i}"][data-l="${L}"]`);
+      const rate = parseFloat(rateInput.value) || 0;
+      out[L] += (rate * points) / 100;
+    });
+  });
+  LEVELS.forEach(L=>{
+    document.getElementById('itemOut_'+L).textContent = out[L].toFixed(2);
+  });
+  return out;
+}
+itemBody.addEventListener('input', computeItemAnalysis);
+
+/* ---- 반영비율 및 학기말 합산 표 ---- */
+const FINAL_ROWS = [
+  {key:'exam1', label:'1차정기시험', ratio:0.25, val:{A:78.03,B:64.53,C:51.03,D:37.53,E:0}},
+  {key:'exam2', label:'2차정기시험', ratio:0.25, val:{A:78.03,B:64.53,C:51.03,D:37.53,E:0}},
+  {key:'perf',  label:'수행평가',    ratio:1,    val:{A:45.00,B:40.00,C:35.00,D:30.00,E:0}},
+];
+const finalBody = document.querySelector('#finalTable tbody');
+FINAL_ROWS.forEach(row=>{
+  const tr = document.createElement('tr');
+  let html = `<th>${row.label}</th>`;
+  if(row.key === 'perf'){
+    // 수행평가 반영비율은 1로 고정 (수정 불가)
+    html += `<td><input type="number" value="1" data-final-ratio="${row.key}" class="fixed-ratio" disabled></td>`;
+  } else {
+    html += `<td><input type="number" step="0.01" data-final-ratio="${row.key}" value="${row.ratio}"></td>`;
+  }
+  LEVELS.forEach(L=>{
+    html += `<td><input type="number" step="0.01" data-final-val="${row.key}" data-l="${L}" value="${row.val[L]}"></td>`;
+  });
+  tr.innerHTML = html;
+  finalBody.appendChild(tr);
+});
+const finalOutRow = document.createElement('tr');
+finalOutRow.className = 'final-row';
+finalOutRow.innerHTML = `<th colspan="2">학기말 산출되는<br>추정점수</th>` +
+  LEVELS.map(L=>`<td id="finalOut_${L}">0.00</td>`).join('');
+finalBody.appendChild(finalOutRow);
+
+function recomputeFinal(){
+  LEVELS.forEach(L=>{
+    let sum = 0;
+    FINAL_ROWS.forEach(row=>{
+      const ratioInput = finalBody.querySelector(`input[data-final-ratio="${row.key}"]`);
+      const valInput = finalBody.querySelector(`input[data-final-val="${row.key}"][data-l="${L}"]`);
+      const ratio = parseFloat(ratioInput.value) || 0;
+      const val = parseFloat(valInput.value) || 0;
+      sum += ratio * val;
+    });
+    document.getElementById('finalOut_'+L).textContent = sum.toFixed(2);
+  });
+}
+finalBody.addEventListener('input', recomputeFinal);
+
+document.getElementById('applyExam1').addEventListener('click', ()=>{
+  const r = computeItemAnalysis();
+  LEVELS.forEach(L=>{
+    finalBody.querySelector(`input[data-final-val="exam1"][data-l="${L}"]`).value = r[L].toFixed(2);
+  });
+  recomputeFinal();
+});
+document.getElementById('applyExam2').addEventListener('click', ()=>{
+  const r = computeItemAnalysis();
+  LEVELS.forEach(L=>{
+    finalBody.querySelector(`input[data-final-val="exam2"][data-l="${L}"]`).value = r[L].toFixed(2);
+  });
+  recomputeFinal();
+});
+
+computeItemAnalysis();
+recomputeFinal();
+
+/* =========================================================
+   Ⅱ. 1학기 추정분할 점수 조회
+   ========================================================= */
+const qInput = document.getElementById('q');
+const suggestBox = document.getElementById('suggest');
+const resultArea = document.getElementById('resultArea');
+const subjectSelect = document.getElementById('subjectSelect');
+let activeIndex = -1;
+let currentMatches = [];
+let chart = null;
+let pendingSubject = null;
+
+/* ---- 드롭다운(과목 직접 선택) 구성: 교과군별 optgroup ---- */
+(function buildSubjectSelect(){
+  const groups = {};
+  SUBJECTS.forEach((s, idx)=>{
+    (groups[s.group] = groups[s.group] || []).push(idx);
+  });
+  let optHtml = '<option value="">▾ 과목 드롭다운 선택</option>';
+  Object.keys(groups).forEach(g=>{
+    optHtml += `<optgroup label="${g}">`;
+    groups[g].forEach(idx=>{
+      const s = SUBJECTS[idx];
+      optHtml += `<option value="${idx}">${s.subject} (${s.grade})</option>`;
+    });
+    optHtml += '</optgroup>';
+  });
+  subjectSelect.innerHTML = optHtml;
+})();
+subjectSelect.addEventListener('change', ()=>{
+  if(subjectSelect.value === '') return;
+  selectSubject(SUBJECTS[+subjectSelect.value]);
+});
+
+/* ---- Chart.js 로딩 상태 처리 ---- */
+const chartStatus = document.getElementById('chartStatus');
+const chartCanvas = document.getElementById('ratioChart');
+let chartReady = (typeof Chart !== 'undefined');
+
+function showChartReady(){
+  chartReady = true;
+  chartStatus.style.display = 'none';
+  chartCanvas.style.display = 'block';
+  if(pendingSubject){ drawChart(pendingSubject); pendingSubject = null; }
+}
+function showChartFailed(){
+  chartStatus.textContent = '그래프 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 새로고침해 주세요. (표는 정상적으로 확인할 수 있습니다.)';
+}
+if(chartReady){ showChartReady(); }
+window.addEventListener('chartjs-ready', showChartReady);
+window.addEventListener('chartjs-failed', showChartFailed);
+if(window.__chartLoadFailed){ showChartFailed(); }
+
+function keyOf(s){ return s.subject + '__' + s.grade + '__' + s.group; }
+
+function filterSubjects(term){
+  term = term.trim();
+  if(!term) return [];
+  return SUBJECTS.filter(s => s.subject.includes(term)).slice(0, 30);
+}
+
+function renderSuggest(list){
+  currentMatches = list;
+  activeIndex = -1;
+  if(list.length === 0){ suggestBox.classList.remove('show'); suggestBox.innerHTML=''; return; }
+  suggestBox.innerHTML = list.map((s,idx)=>`
+    <div class="opt" data-idx="${idx}">
+      <span>${s.subject} <span class="g">(${s.grade})</span></span>
+      <span class="g">${s.group}</span>
+    </div>`).join('');
+  suggestBox.classList.add('show');
+}
+
+qInput.addEventListener('input', ()=> renderSuggest(filterSubjects(qInput.value)));
+qInput.addEventListener('focus', ()=>{ if(qInput.value.trim()) renderSuggest(filterSubjects(qInput.value)); });
+document.addEventListener('click', (e)=>{
+  if(!e.target.closest('.search-box')) { suggestBox.classList.remove('show'); }
+});
+
+suggestBox.addEventListener('click', (e)=>{
+  const opt = e.target.closest('.opt');
+  if(!opt) return;
+  selectSubject(currentMatches[+opt.dataset.idx]);
+});
+
+qInput.addEventListener('keydown', (e)=>{
+  if(!suggestBox.classList.contains('show')) return;
+  const opts = [...suggestBox.querySelectorAll('.opt')];
+  if(e.key === 'ArrowDown'){ e.preventDefault(); activeIndex = Math.min(activeIndex+1, opts.length-1); }
+  else if(e.key === 'ArrowUp'){ e.preventDefault(); activeIndex = Math.max(activeIndex-1, 0); }
+  else if(e.key === 'Enter'){ e.preventDefault(); if(activeIndex>=0) selectSubject(currentMatches[activeIndex]); return; }
+  else return;
+  opts.forEach((o,i)=> o.classList.toggle('active', i===activeIndex));
+  if(opts[activeIndex]) opts[activeIndex].scrollIntoView({block:'nearest'});
+});
+
+function fmtCell(v, level){
+  if(v === undefined || v === null || v === '' || v === '-') return `<td class="lvl-${level}">-</td>`;
+  return `<td class="lvl-${level}">${v}</td>`;
+}
+
+function selectSubject(s){
+  if(!s) return;
+  qInput.value = s.subject + ' (' + s.grade + ')';
+  suggestBox.classList.remove('show');
+  const idx = SUBJECTS.indexOf(s);
+  if(idx >= 0) subjectSelect.value = String(idx);
+
+  const rowsDef = [
+    {label:`수행평가 추정점수${s.maxScore ? ' (만점 '+s.maxScore+')' : ''}`, data:s.perf},
+    {label:'1차 정기시험 추정점수', data:s.exam1},
+    {label:'2차 정기시험 추정점수', data:s.exam2},
+    {label:'학기말 추정점수 (급간 하한)', data:s.final},
+  ];
+
+  let bodyRows = rowsDef.map(r => `
+    <tr>
+      <th>${r.label}</th>
+      ${fmtCell(r.data.A,'A')}${fmtCell(r.data.B,'B')}${fmtCell(r.data.C,'C')}${fmtCell(r.data.D,'D')}${fmtCell(r.data.E,'E')}
+      ${fmtCell(r.data.below,'below')}
+    </tr>`).join('');
+
+  bodyRows += `
+    <tr class="ratio-row">
+      <th>학기말 학생 비율 (%)</th>
+      ${fmtCell(s.ratio.A,'A')}${fmtCell(s.ratio.B,'B')}${fmtCell(s.ratio.C,'C')}${fmtCell(s.ratio.D,'D')}${fmtCell(s.ratio.E,'E')}
+      ${fmtCell(s.ratio.below,'below')}
+    </tr>`;
+
+  resultArea.innerHTML = `
+    <div class="subject-tag"><b>${s.subject}</b><span>${s.group}</span><span>${s.grade}</span></div>
+    <table class="report">
+      <thead><tr><th style="text-align:left;">구분</th><th>A</th><th>B</th><th>C</th><th>D</th><th>E<br>(공통만)</th><th>미도달/비고</th></tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+  `;
+
+  if(chartReady){
+    drawChart(s);
+  } else {
+    pendingSubject = s;
+  }
+}
+
+function drawChart(s){
+  const labels = ['A','B','C','D','E','미도달'];
+  const raw = [s.ratio.A, s.ratio.B, s.ratio.C, s.ratio.D, s.ratio.E, s.ratio.below];
+  const values = raw.map(v => {
+    if(!v || v === '-') return null;
+    const n = parseFloat(String(v).replace('%',''));
+    return isNaN(n) ? null : n;
+  });
+  const colors = ['#1f7a5c','#2e6f9e','#b98a2e','#c1652e','#a63d3d','#7c838a'];
+
+  const ctx = document.getElementById('ratioChart').getContext('2d');
+  if(chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[{
+        label: s.subject + ' 학생 비율(%)',
+        data: values,
+        backgroundColor: colors,
+        borderRadius: 2,
+      }]
+    },
+    options:{
+      responsive:true,
+      plugins:{
+        legend:{ display:false },
+        tooltip:{ callbacks:{ label: (c)=> c.formattedValue + '%' } }
+      },
+      scales:{
+        y:{ beginAtZero:true, ticks:{ callback:(v)=> v+'%' } }
+      }
+    }
+  });
+
+  document.getElementById('chartNote').textContent =
+    `${s.group} · ${s.subject} (${s.grade}) — 급간 하한: A ${s.final.A ?? '-'} / B ${s.final.B ?? '-'} / C ${s.final.C ?? '-'} / D ${s.final.D ?? '-'} / E ${s.final.E ?? '-'}`;
+}
+</script>
+</body>
+</html>
